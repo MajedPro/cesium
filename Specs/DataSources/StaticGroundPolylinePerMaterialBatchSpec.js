@@ -122,6 +122,54 @@ defineSuite([
         });
     });
 
+    it('updates color attribute after rebuilding geometry primitive', function() {
+        if (!GroundPolylinePrimitive.isSupported(scene)) {
+            // Don't fail if GroundPolylinePrimitive is not supported
+            return;
+        }
+
+        var polyline = createGroundPolyline();
+        polyline.material = Color.RED;
+        var entity = new Entity({
+            availability: new TimeIntervalCollection([TimeInterval.fromIso8601({iso8601: '2018-02-14T04:00:00+1100/2018-02-14T04:30:00+1100'})]),
+            polyline: polyline
+        });
+
+        var batch = new StaticGroundPolylinePerMaterialBatch(scene.groundPrimitives);
+
+        var updater = new PolylineGeometryUpdater(entity, scene);
+        batch.add(time, updater);
+
+        return pollToPromise(function() {
+            scene.initializeFrame();
+            var isUpdated = batch.update(time);
+            scene.render(time);
+            return isUpdated;
+        }).then(function() {
+            expect(scene.groundPrimitives.length).toEqual(1);
+            var primitive = scene.groundPrimitives.get(0);
+            var attributes = primitive.getGeometryInstanceAttributes(entity);
+            expect(attributes.color).toEqual([255, 0, 0, 255]);
+
+            entity.polyline.material = Color.GREEN;
+            updater._onEntityPropertyChanged(entity, 'polyline');
+            batch.remove(updater);
+            batch.add(time, updater);
+            return pollToPromise(function() {
+                scene.initializeFrame();
+                var isUpdated = batch.update(time);
+                scene.render(time);
+                return isUpdated;
+            }).then(function() {
+                expect(scene.groundPrimitives.length).toEqual(1);
+                var primitive = scene.groundPrimitives.get(0);
+                var attributes = primitive.getGeometryInstanceAttributes(entity);
+                expect(attributes.color).toEqual([0, 128, 0, 255]);
+                batch.removeAllPrimitives();
+            });
+        });
+    });
+
     it('updates with sampled distance display condition out of range', function() {
         if (!GroundPolylinePrimitive.isSupported(scene)) {
             // Don't fail if GroundPolylinePrimitive is not supported
